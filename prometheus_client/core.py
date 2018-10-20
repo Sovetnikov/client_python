@@ -2,7 +2,6 @@
 
 from __future__ import unicode_literals
 
-from collections import namedtuple
 import copy
 import json
 import math
@@ -11,10 +10,11 @@ import os
 import re
 import struct
 import sys
-from threading import Lock
 import time
-from timeit import default_timer
 import types
+from collections import namedtuple
+from threading import Lock
+from timeit import default_timer
 
 from .decorator import decorate
 
@@ -653,7 +653,6 @@ def _mmap_key(metric_name, name, labelnames, labelvalues):
     labels = dict(zip(labelnames, labelvalues))
     return json.dumps([metric_name, name, labels], sort_keys=True)
 
-
 def _MultiProcessValue(_pidFunc=os.getpid):
     files = {}
     values = []
@@ -727,6 +726,10 @@ def _MultiProcessValue(_pidFunc=os.getpid):
 # no control over we use an environment variable.
 if 'prometheus_multiproc_dir' in os.environ:
     _ValueClass = _MultiProcessValue()
+elif 'prometheus_distributed' in os.environ:
+    from prometheus_client.distributed import DistributedValue
+
+    _ValueClass = DistributedValue
 else:
     _ValueClass = _MutexValue
 
