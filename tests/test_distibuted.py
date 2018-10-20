@@ -3,8 +3,10 @@ from __future__ import unicode_literals
 import glob
 import os
 import shutil
+import socket
 import sys
 import tempfile
+from random import randint
 
 import django
 
@@ -13,7 +15,7 @@ from prometheus_client.core import (
     CollectorRegistry, Counter, Gauge, Histogram, Sample, Summary,
 )
 from prometheus_client.multiprocess import (
-    mark_process_dead, MultiProcessCollector,
+    MultiProcessCollector,
 )
 
 if sys.version_info < (2, 7):
@@ -23,6 +25,8 @@ else:
     import unittest
 
 from unittest.mock import Mock, patch
+
+hostname = socket.gethostname()
 
 
 class TestDistributed(unittest.TestCase):
@@ -64,12 +68,12 @@ class TestDistributed(unittest.TestCase):
         core._ValueClass = core._MutexValue
 
     def test_counter_adds(self):
-        c1 = Counter('c', 'help', registry=None)
-        c2 = Counter('c', 'help', registry=None)
-        self.assertEqual(0, self.registry.get_sample_value('c_total'))
+        c1 = Counter('c2', 'help', registry=None)
+        c2 = Counter('c2', 'help', registry=None)
+        self.assertEqual(0, self.registry.get_sample_value('c2_total'))
         c1.inc(1)
         c2.inc(2)
-        self.assertEqual(3, self.registry.get_sample_value('c_total'))
+        self.assertEqual(3, self.registry.get_sample_value('c2_total'))
 
     def test_summary_adds(self):
         s1 = Summary('s', 'help', registry=None)
@@ -94,58 +98,67 @@ class TestDistributed(unittest.TestCase):
         self.assertEqual(2, self.registry.get_sample_value('h_bucket', {'le': '5.0'}))
 
     def test_gauge_all(self):
-        g1 = Gauge('g', 'help', registry=None)
-        g2 = Gauge('g', 'help', registry=None)
-        self.assertEqual(0, self.registry.get_sample_value('g', {'pid': '123'}))
-        self.assertEqual(0, self.registry.get_sample_value('g', {'pid': '456'}))
-        g1.set(1)
-        g2.set(2)
-        mark_process_dead(123, os.environ['prometheus_multiproc_dir'])
-        self.assertEqual(1, self.registry.get_sample_value('g', {'pid': '123'}))
-        self.assertEqual(2, self.registry.get_sample_value('g', {'pid': '456'}))
+        self.pid = 123
+        with self.assertRaises(Exception) as e:
+            g1 = Gauge('g1', 'help', registry=None)
+        self.assertTrue('not supported' in str(e.exception))
 
     def test_gauge_liveall(self):
-        g1 = Gauge('g', 'help', registry=None, multiprocess_mode='liveall')
-        
-        g2 = Gauge('g', 'help', registry=None, multiprocess_mode='liveall')
-        self.assertEqual(0, self.registry.get_sample_value('g', {'pid': '123'}))
-        self.assertEqual(0, self.registry.get_sample_value('g', {'pid': '456'}))
+        self.pid = 123
+        g1 = Gauge('g2', 'help', registry=None, multiprocess_mode='liveall')
+        self.pid = 456
+        g2 = Gauge('g2', 'help', registry=None, multiprocess_mode='liveall')
+        self.assertEqual(0, self.registry.get_sample_value('g2', {'hostname':hostname,'pid': '123'}))
+        self.assertEqual(0, self.registry.get_sample_value('g2', {'hostname':hostname,'pid': '456'}))
+        self.pid = 123
         g1.set(1)
+        self.pid = 456
         g2.set(2)
-        self.assertEqual(1, self.registry.get_sample_value('g', {'pid': '123'}))
-        self.assertEqual(2, self.registry.get_sample_value('g', {'pid': '456'}))
-        mark_process_dead(123, os.environ['prometheus_multiproc_dir'])
-        self.assertEqual(None, self.registry.get_sample_value('g', {'pid': '123'}))
-        self.assertEqual(2, self.registry.get_sample_value('g', {'pid': '456'}))
+        self.assertEqual(1, self.registry.get_sample_value('g2', {'hostname':hostname,'pid': '123'}))
+        self.assertEqual(2, self.registry.get_sample_value('g2', {'hostname':hostname,'pid': '456'}))
+        from prometheus_client.distributed import mark_distributed_process_dead
+        mark_distributed_process_dead(123)
+        self.assertEqual(None, self.registry.get_sample_value('g2', {'hostname':hostname,'pid': '123'}))
+        self.assertEqual(2, self.registry.get_sample_value('g2', {'hostname':hostname,'pid': '456'}))
 
     def test_gauge_min(self):
-        g1 = Gauge('g', 'help', registry=None, multiprocess_mode='min')
-        
-        g2 = Gauge('g', 'help', registry=None, multiprocess_mode='min')
-        self.assertEqual(0, self.registry.get_sample_value('g'))
+        self.pid = 123
+        g1 = Gauge('gm', 'help', registry=None, multiprocess_mode='min')
+        self.pid = 456
+        g2 = Gauge('gm', 'help', registry=None, multiprocess_mode='min')
+        self.assertEqual(0, self.registry.get_sample_value('gm', {'hostname':hostname}))
+        self.pid = 123
         g1.set(1)
+        self.pid = 456
         g2.set(2)
-        self.assertEqual(1, self.registry.get_sample_value('g'))
+        self.assertEqual(1, self.registry.get_sample_value('gm', {'hostname':hostname}))
 
     def test_gauge_max(self):
-        g1 = Gauge('g', 'help', registry=None, multiprocess_mode='max')
-        
-        g2 = Gauge('g', 'help', registry=None, multiprocess_mode='max')
-        self.assertEqual(0, self.registry.get_sample_value('g'))
+        self.pid = 123
+        g1 = Gauge('gmax', 'help', registry=None, multiprocess_mode='max')
+        self.pid = 456
+        g2 = Gauge('gmax', 'help', registry=None, multiprocess_mode='max')
+        self.assertEqual(0, self.registry.get_sample_value('gmax', {'hostname':hostname}))
+        self.pid = 123
         g1.set(1)
+        self.pid = 456
         g2.set(2)
-        self.assertEqual(2, self.registry.get_sample_value('g'))
+        self.assertEqual(2, self.registry.get_sample_value('gmax', {'hostname':hostname}))
 
     def test_gauge_livesum(self):
-        g1 = Gauge('g', 'help', registry=None, multiprocess_mode='livesum')
-        
-        g2 = Gauge('g', 'help', registry=None, multiprocess_mode='livesum')
-        self.assertEqual(0, self.registry.get_sample_value('g'))
+        self.pid = 123
+        g1 = Gauge('gls', 'help', registry=None, multiprocess_mode='livesum')
+        self.pid = 456
+        g2 = Gauge('gls', 'help', registry=None, multiprocess_mode='livesum')
+        self.assertEqual(0, self.registry.get_sample_value('gls', {'hostname':hostname}))
+        self.pid = 123
         g1.set(1)
+        self.pid = 456
         g2.set(2)
-        self.assertEqual(3, self.registry.get_sample_value('g'))
-        mark_process_dead(123, os.environ['prometheus_multiproc_dir'])
-        self.assertEqual(2, self.registry.get_sample_value('g'))
+        self.assertEqual(3, self.registry.get_sample_value('gls', {'hostname':hostname}))
+        from prometheus_client.distributed import mark_distributed_process_dead
+        mark_distributed_process_dead(123)
+        self.assertEqual(2, self.registry.get_sample_value('gls', {'hostname':hostname}))
 
     def test_namespace_subsystem(self):
         c1 = Counter('c', 'help', registry=None, namespace='ns', subsystem='ss')
@@ -163,25 +176,6 @@ class TestDistributed(unittest.TestCase):
         self.assertEqual(3, self.registry.get_sample_value('c_total'))
         self.assertEqual(1, c1._value.get())
 
-    def test_initialization_detects_pid_change(self):
-        self.pid = 0
-
-        # can not inspect the files cache directly, as it's a closure, so we
-        # check for the actual files themselves
-        def files():
-            fs = os.listdir(os.environ['prometheus_multiproc_dir'])
-            fs.sort()
-            return fs
-
-        c1 = Counter('c1', 'c1', registry=None)
-        self.assertEqual(files(), ['counter_0.db'])
-        c2 = Counter('c2', 'c2', registry=None)
-        self.assertEqual(files(), ['counter_0.db'])
-        self.pid = 1
-        c3 = Counter('c3', 'c3', registry=None)
-        self.assertEqual(files(), ['counter_0.db', 'counter_1.db'])
-
-
     @unittest.skipIf(sys.version_info < (2, 7), "Test requires Python 2.7+.")
     def test_collect(self):
         self.pid = 0
@@ -194,7 +188,7 @@ class TestDistributed(unittest.TestCase):
             return l
 
         c = Counter('c', 'help', labelnames=labels.keys(), registry=None)
-        g = Gauge('g', 'help', labelnames=labels.keys(), registry=None)
+        g = Gauge('g', 'help', labelnames=labels.keys(), registry=None, multiprocess_mode='liveall')
         h = Histogram('h', 'help', labelnames=labels.keys(), registry=None)
 
         c.labels(**labels).inc(1)
@@ -255,78 +249,39 @@ class TestDistributed(unittest.TestCase):
             l[key] = value
             return l
 
-        h = Histogram('h', 'help', labelnames=labels.keys(), registry=None)
+        h = Histogram('hna', 'help', labelnames=labels.keys(), registry=None)
         h.labels(**labels).observe(1)
         self.pid = 1
         h.labels(**labels).observe(5)
 
-        path = os.path.join(os.environ['prometheus_multiproc_dir'], '*.db')
-        files = glob.glob(path)
-        metrics = dict(
-            (m.name, m) for m in self.collector.merge(files, accumulate=False)
-        )
+        self.collector.accumulate = False
+        metrics = self.collector.collect()
+        self.collector.accumulate = True
 
-        metrics['h'].samples.sort(
+        metric = [x for x in metrics if x.name == 'hna'][0]
+        metric.samples.sort(
             key=lambda x: (x[0], float(x[1].get('le', 0)))
         )
         expected_histogram = [
-            Sample('h_bucket', add_label('le', '0.005'), 0.0),
-            Sample('h_bucket', add_label('le', '0.01'), 0.0),
-            Sample('h_bucket', add_label('le', '0.025'), 0.0),
-            Sample('h_bucket', add_label('le', '0.05'), 0.0),
-            Sample('h_bucket', add_label('le', '0.075'), 0.0),
-            Sample('h_bucket', add_label('le', '0.1'), 0.0),
-            Sample('h_bucket', add_label('le', '0.25'), 0.0),
-            Sample('h_bucket', add_label('le', '0.5'), 0.0),
-            Sample('h_bucket', add_label('le', '0.75'), 0.0),
-            Sample('h_bucket', add_label('le', '1.0'), 1.0),
-            Sample('h_bucket', add_label('le', '2.5'), 0.0),
-            Sample('h_bucket', add_label('le', '5.0'), 1.0),
-            Sample('h_bucket', add_label('le', '7.5'), 0.0),
-            Sample('h_bucket', add_label('le', '10.0'), 0.0),
-            Sample('h_bucket', add_label('le', '+Inf'), 0.0),
-            Sample('h_sum', labels, 6.0),
+            Sample('hna_bucket', add_label('le', '0.005'), 0.0),
+            Sample('hna_bucket', add_label('le', '0.01'), 0.0),
+            Sample('hna_bucket', add_label('le', '0.025'), 0.0),
+            Sample('hna_bucket', add_label('le', '0.05'), 0.0),
+            Sample('hna_bucket', add_label('le', '0.075'), 0.0),
+            Sample('hna_bucket', add_label('le', '0.1'), 0.0),
+            Sample('hna_bucket', add_label('le', '0.25'), 0.0),
+            Sample('hna_bucket', add_label('le', '0.5'), 0.0),
+            Sample('hna_bucket', add_label('le', '0.75'), 0.0),
+            Sample('hna_bucket', add_label('le', '1.0'), 1.0),
+            Sample('hna_bucket', add_label('le', '2.5'), 0.0),
+            Sample('hna_bucket', add_label('le', '5.0'), 1.0),
+            Sample('hna_bucket', add_label('le', '7.5'), 0.0),
+            Sample('hna_bucket', add_label('le', '10.0'), 0.0),
+            Sample('hna_bucket', add_label('le', '+Inf'), 0.0),
+            Sample('hna_sum', labels, 6.0),
         ]
 
-        self.assertEqual(metrics['h'].samples, expected_histogram)
-
-
-class TestMmapedDict(unittest.TestCase):
-    def setUp(self):
-        fd, self.tempfile = tempfile.mkstemp()
-        os.close(fd)
-        self.d = core._MmapedDict(self.tempfile)
-
-    def test_process_restart(self):
-        self.d.write_value('abc', 123.0)
-        self.d.close()
-        self.d = core._MmapedDict(self.tempfile)
-        self.assertEqual(123, self.d.read_value('abc'))
-        self.assertEqual([('abc', 123.0)], list(self.d.read_all_values()))
-
-    def test_expansion(self):
-        key = 'a' * core._INITIAL_MMAP_SIZE
-        self.d.write_value(key, 123.0)
-        self.assertEqual([(key, 123.0)], list(self.d.read_all_values()))
-
-    def test_multi_expansion(self):
-        key = 'a' * core._INITIAL_MMAP_SIZE * 4
-        self.d.write_value('abc', 42.0)
-        self.d.write_value(key, 123.0)
-        self.d.write_value('def', 17.0)
-        self.assertEqual(
-            [('abc', 42.0), (key, 123.0), ('def', 17.0)],
-            list(self.d.read_all_values()))
-
-    def test_corruption_detected(self):
-        self.d.write_value('abc', 42.0)
-        # corrupt the written data
-        self.d._m[8:16] = b'somejunk'
-        with self.assertRaises(RuntimeError):
-            list(self.d.read_all_values())
-
-    def tearDown(self):
-        os.unlink(self.tempfile)
+        self.assertEqual(metric.samples, expected_histogram)
 
 
 class TestUnsetEnv(unittest.TestCase):

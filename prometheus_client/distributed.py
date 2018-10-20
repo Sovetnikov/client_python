@@ -8,12 +8,16 @@ import os
 import socket
 import time
 from collections import defaultdict
+from threading import Lock
 
 from django.core.cache import cache
 
 hostname = socket.gethostname()
 
 in_lock = None
+
+lock = Lock()
+
 class CacheLock(object):
     def __init__(self, lock_id, ttl):
         self.id = 'cachelock-{0}'.format(lock_id)
@@ -63,6 +67,25 @@ def add_to_distributed_list(pid):
             added_to_distributed_list.add((hostname, pid))
 
 
+def remove_from_distributed_list(pid):
+    with distributed_list_lock:
+        l = cache.get(distributed_list_cache_key, set())
+
+        def _iterate():
+            if isinstance(pid, int):
+                yield pid
+            else:
+                for p in pid:
+                    yield p
+
+        if (hostname, pid) in l:
+            l.remove((hostname, pid))
+        if (hostname, pid) in added_to_distributed_list:
+            added_to_distributed_list.remove((hostname, pid))
+
+        cache.set(distributed_list_cache_key, l, 60 * 20)
+
+
 _pidFunc = os.getpid
 
 __cached_get_all_typ = None
@@ -83,8 +106,8 @@ def get_all_typ():
                 wrapper = getattr(obj, '__wrapped__', None)
                 if wrapper:
                     typ = getattr(wrapper, '_type', None)
-                if typ:
-                    __cached_get_all_typ.append(typ)
+                    if typ:
+                        __cached_get_all_typ.append(typ)
         __cached_get_all_typ.extend([core.Gauge.__wrapped__._type + '_' + mode for mode in core.Gauge.__wrapped__._MULTIPROC_MODES])
     return __cached_get_all_typ
 
@@ -106,6 +129,8 @@ class DistributedValue(object):
 
     def __init__(self, typ, metric_name, name, labelnames, labelvalues, multiprocess_mode='', **kwargs):
         if typ == 'gauge':
+            if multiprocess_mode == 'all':
+                raise Exception('multiprocess_mode=all not supported in distributed storage')
             typ_prefix = typ + '_' + multiprocess_mode
         else:
             typ_prefix = typ
@@ -114,10 +139,6 @@ class DistributedValue(object):
 
         self.valuekey = core._mmap_key(metric_name, name, labelnames, labelvalues)
         self.__reset()
-
-    @property
-    def lock(self):
-        return CacheLock(self.cachekey, ttl=3)
 
     @property
     def cachekey(self):
@@ -132,26 +153,26 @@ class DistributedValue(object):
         cache.set(self.cachekey, dict_value, 60 * 10)
 
     def __reset(self):
-        with self.lock:
+        with lock:
             d = self.__get_dict()
             if not self.valuekey in d:
                 d[self.valuekey] = 0
                 self.__set_dict(d)
 
     def inc(self, amount):
-        with self.lock:
+        with lock:
             d = self.__get_dict()
-            d[self.valuekey] = d.get(self.valuekey,0) + amount
+            d[self.valuekey] = d.get(self.valuekey, 0) + amount
             self.__set_dict(d)
 
     def set(self, value):
-        with self.lock:
+        with lock:
             d = self.__get_dict()
             d[self.valuekey] = value
             self.__set_dict(d)
 
     def get(self):
-        with self.lock:
+        with lock:
             return self.__get_dict().get(self.valuekey, None)
 
 
@@ -159,6 +180,7 @@ class DistributedCollector(object):
     def __init__(self, registry):
         if registry:
             registry.register(self)
+        self.accumulate = True
 
     def collect(self):
         cache_keys = set()
@@ -167,7 +189,7 @@ class DistributedCollector(object):
             for typ in get_all_typ():
                 cache_keys.add(get_cache_key(typ, hostname, pid))
 
-        return self.merge(cache.get_many(cache_keys), accumulate=True)
+        return self.merge(cache.get_many(cache_keys), accumulate=self.accumulate)
 
     def merge(self, cache_values, accumulate=True):
         """Merge metrics from given mmap files.
@@ -176,6 +198,7 @@ class DistributedCollector(object):
         But if writing the merged data back to mmap files, use
         accumulate=False to avoid compound accumulation.
         """
+        from . import core
         metrics = {}
         for cache_key, cache_value in cache_values.items():
             typ, value_hostname, pid = deconstruct_cache_key(cache_key)
@@ -188,8 +211,6 @@ class DistributedCollector(object):
 
                 metric = metrics.get(metric_name)
                 if metric is None:
-                    from . import core
-
                     metric = core.Metric(metric_name, 'Multiprocess metric', typ)
                     metrics[metric_name] = metric
 
@@ -258,3 +279,7 @@ class DistributedCollector(object):
             # Convert to correct sample format.
             metric.samples = [core.Sample(name, dict(labels), value) for (name, labels), value in samples.items()]
         return metrics.values()
+
+
+def mark_distributed_process_dead(pid):
+    remove_from_distributed_list(pid)
