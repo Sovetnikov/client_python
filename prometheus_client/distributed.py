@@ -13,7 +13,7 @@ from django.core.cache import cache
 
 hostname = socket.gethostname()
 
-
+in_lock = None
 class CacheLock(object):
     def __init__(self, lock_id, ttl):
         self.id = 'cachelock-{0}'.format(lock_id)
@@ -25,17 +25,23 @@ class CacheLock(object):
         return self.status
 
     def __enter__(self):
+        global in_lock
+        if in_lock:
+            raise Exception('Already on lock ' + in_lock)
         trys = 6
         while trys:
             self.timeout_at = time.monotonic() + self.ttl - 2
             self.status = cache.add(self.id, 'locked', self.ttl)
             if self.status:
+                in_lock = self.id
                 return self.status
             time.sleep(0.1)
             trys -= 1
         raise Exception('Could not lock for {self.id}'.format(**locals()))
 
     def __exit__(self, type, value, tb):
+        global in_lock
+        in_lock = None
         if self.status:
             if time.monotonic() < self.timeout_at:
                 cache.delete(self.id)
@@ -104,7 +110,7 @@ class DistributedValue(object):
         self.typ_prefix = typ_prefix
         from . import core
 
-        self.valuekey = self._key = core._mmap_key(metric_name, name, labelnames, labelvalues)
+        self.valuekey = core._mmap_key(metric_name, name, labelnames, labelvalues)
         self.__reset()
 
     @property
