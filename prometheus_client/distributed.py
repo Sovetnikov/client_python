@@ -132,8 +132,8 @@ class DistributedValue(object):
 
     def __init__(self, typ, metric_name, name, labelnames, labelvalues, multiprocess_mode='', **kwargs):
         if typ == 'gauge':
-            if multiprocess_mode == 'all':
-                raise Exception('multiprocess_mode=all not supported in distributed storage')
+            # if multiprocess_mode == 'all':
+            #     raise Exception('multiprocess_mode=all not supported in distributed storage')
             typ_prefix = typ + '_' + multiprocess_mode
         else:
             typ_prefix = typ
