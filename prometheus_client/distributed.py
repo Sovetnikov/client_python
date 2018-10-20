@@ -52,6 +52,7 @@ def add_to_distributed_list(pid):
             l = cache.get(distributed_list_cache_key, set())
             l.add((hostname, pid))
             cache.set(distributed_list_cache_key, l, 60 * 20)
+            added_to_distributed_list.add((hostname, pid))
 
 
 _pidFunc = os.getpid
