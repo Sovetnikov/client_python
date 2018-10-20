@@ -45,6 +45,8 @@ class CacheLock(object):
         if self.status:
             if time.monotonic() < self.timeout_at:
                 cache.delete(self.id)
+            if self.id in cache:
+                raise Exception('Id in cache ' + self.id)
 
 
 distributed_list_cache_key = 'pc_distributed_list'
