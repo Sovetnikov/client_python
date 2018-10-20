@@ -11,8 +11,6 @@ from collections import defaultdict
 
 from django.core.cache import cache
 
-from . import core
-
 hostname = socket.gethostname()
 
 
@@ -62,6 +60,8 @@ __cached_get_all_typ = None
 
 
 def get_all_typ():
+    from . import core
+
     global __cached_get_all_typ
     if __cached_get_all_typ is None:
         __cached_get_all_typ = []
@@ -101,6 +101,8 @@ class DistributedValue(object):
         else:
             typ_prefix = typ
         self.typ_prefix = typ_prefix
+        from . import core
+
         self.valuekey = self._key = core._mmap_key(metric_name, name, labelnames, labelvalues)
         self.__reset()
 
@@ -177,6 +179,8 @@ class DistributedCollector(object):
 
                 metric = metrics.get(metric_name)
                 if metric is None:
+                    from . import core
+
                     metric = core.Metric(metric_name, 'Multiprocess metric', typ)
                     metrics[metric_name] = metric
 
