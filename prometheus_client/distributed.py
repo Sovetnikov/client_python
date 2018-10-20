@@ -30,7 +30,7 @@ class CacheLock(object):
             raise Exception('Already on lock ' + in_lock)
         trys = 6
         while trys:
-            self.timeout_at = time.monotonic() + self.ttl - 2
+            self.timeout_at = time.monotonic() + self.ttl
             self.status = cache.add(self.id, 'locked', self.ttl)
             if self.status:
                 in_lock = self.id
