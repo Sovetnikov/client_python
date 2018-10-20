@@ -10,7 +10,8 @@ import time
 from collections import defaultdict
 from threading import Lock
 
-from django.core.cache import cache
+from django.core.cache import caches
+cache = caches[os.environ.get('prometheus_django_cache','default')]
 
 hostname = socket.gethostname()
 
@@ -54,16 +55,18 @@ class CacheLock(object):
 
 
 distributed_list_cache_key = 'pc_distributed_list'
-distributed_list_lock = CacheLock(distributed_list_cache_key, ttl=3)
+distributed_list_lock = CacheLock(distributed_list_cache_key, ttl=20)
 added_to_distributed_list = set()
 
+distributed_list_ttl_minutes = 60*24*5
+distributed_value_ttl_minutes = 60*24*5
 
 def add_to_distributed_list(pid):
     if not (hostname, pid) in added_to_distributed_list:
         with distributed_list_lock:
             l = cache.get(distributed_list_cache_key, set())
             l.add((hostname, pid))
-            cache.set(distributed_list_cache_key, l, 60 * 20)
+            cache.set(distributed_list_cache_key, l, distributed_list_ttl_minutes*60)
             added_to_distributed_list.add((hostname, pid))
 
 
@@ -83,7 +86,7 @@ def remove_from_distributed_list(pid):
         if (hostname, pid) in added_to_distributed_list:
             added_to_distributed_list.remove((hostname, pid))
 
-        cache.set(distributed_list_cache_key, l, 60 * 20)
+        cache.set(distributed_list_cache_key, l, distributed_list_ttl_minutes*60)
 
 
 _pidFunc = os.getpid
@@ -150,7 +153,7 @@ class DistributedValue(object):
         return cache.get(self.cachekey, {})
 
     def __set_dict(self, dict_value):
-        cache.set(self.cachekey, dict_value, 60 * 10)
+        cache.set(self.cachekey, dict_value, distributed_value_ttl_minutes)
 
     def __reset(self):
         with lock:
