@@ -156,27 +156,27 @@ class DistributedValue(object):
         cache.set(self.cachekey, dict_value, distributed_value_ttl_minutes)
 
     def __reset(self):
-        with lock:
-            d = self.__get_dict()
-            if not self.valuekey in d:
-                d[self.valuekey] = 0
-                self.__set_dict(d)
+        # with lock:
+        d = self.__get_dict()
+        if not self.valuekey in d:
+            d[self.valuekey] = 0
+            self.__set_dict(d)
 
     def inc(self, amount):
-        with lock:
-            d = self.__get_dict()
-            d[self.valuekey] = d.get(self.valuekey, 0) + amount
-            self.__set_dict(d)
+        # with lock:
+        d = self.__get_dict()
+        d[self.valuekey] = d.get(self.valuekey, 0) + amount
+        self.__set_dict(d)
 
     def set(self, value):
-        with lock:
-            d = self.__get_dict()
-            d[self.valuekey] = value
-            self.__set_dict(d)
+        # with lock:
+        d = self.__get_dict()
+        d[self.valuekey] = value
+        self.__set_dict(d)
 
     def get(self):
-        with lock:
-            return self.__get_dict().get(self.valuekey, None)
+        # with lock:
+        return self.__get_dict().get(self.valuekey, None)
 
 
 class DistributedCollector(object):
