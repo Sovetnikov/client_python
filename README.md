@@ -16,6 +16,8 @@ distributed.mark_process_dead works like multiprocess.mark_process_dead but remo
 
 Metric storing process has no locking mechanism for read and write because metrics storage is per process with assumption that there is no theading. 
 
+Adapted multiprocess tests is working.
+
 ## Advantages
 * any distributed application will work out of the box
 * no FD leaking like in multiprocessing mode with uwsgi
