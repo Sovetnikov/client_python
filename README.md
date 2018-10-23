@@ -12,7 +12,7 @@ Process added to that list just once, when first metric value is stored.
 
 Gauge modes work like with "prometheus_multiproc_dir", but mode "all" is working like "liveall".
 
-distributed.mark_process_dead works like multiprocess.mark_process_dead but removes all gauge modes include mode "all". 
+distributed.mark_process_dead works like multiprocess.mark_process_dead but removes all gauge modes including mode "all". 
 
 Metric storing process has no locking mechanism for read and write because metrics storage is per process with assumption that there is no theading. 
 
