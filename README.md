@@ -29,6 +29,8 @@ Adapted multiprocess tests is working.
 * metrics stored in cache have ttl (5 days by now) and old counters can be evicted so counter value will decrease (ttl refreshing is planned, but django 1.7 cache API is not supported touch method).
 * maybe performance can suffer because of network overhead (no performance tests are done by now)
 * hostname+pid list has no cleaning process and can grow up
+* just testing it in production, it's early alpha version
+* i plan to test it only with redis backend 
 
 ## Requirements
 * Django 1.7+ supported
