@@ -31,8 +31,8 @@ class CacheLock(object):
 
     def __enter__(self):
         global in_lock
-        if in_lock:
-            raise Exception('Already on lock ' + in_lock)
+        # if in_lock:
+        #     raise Exception('Already on lock ' + in_lock)
         trys = 6
         while trys:
             self.timeout_at = time.monotonic() + self.ttl
