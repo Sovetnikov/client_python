@@ -52,14 +52,20 @@ class CacheLock(object):
             if self.status:
                 in_lock = self.id
 
-                from sentry_sdk import capture_message
-                capture_message('Locked for {self.id}'.format(**locals()))
+                from sentry_sdk import capture_exception
+                try:
+                    raise Exception('Locked for {self.id}'.format(**locals()))
+                except Exception as e:
+                    capture_exception(e)
 
                 return self.status
             time.sleep(0.1)
             trys -= 1
-        from sentry_sdk import capture_message
-        capture_message('Could not lock for {self.id}'.format(**locals()))
+        from sentry_sdk import capture_exception
+        try:
+            raise Exception('Could not lock for {self.id}'.format(**locals()))
+        except Exception as e:
+            capture_exception(e)
         raise Exception('Could not lock for {self.id}'.format(**locals()))
 
     def __exit__(self, type, value, tb):
