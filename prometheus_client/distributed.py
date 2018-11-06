@@ -38,9 +38,9 @@ class CacheLock(object):
         return self.status
 
     def __enter__(self):
-        if self.status:
-            # Already locked - return fake success lock
-            return FakeSuccessContextManager().__enter__()
+        # if self.status:
+        #     # Already locked - return fake success lock
+        #     return FakeSuccessContextManager().__enter__()
 
         global in_lock
         # if in_lock:
@@ -52,18 +52,14 @@ class CacheLock(object):
             if self.status:
                 in_lock = self.id
 
-                try:
-                    from sentry_sdk import add_breadcrumb
-                    add_breadcrumb(
-                        category='lock',
-                        message='locked {self.id}'.format(**locals()),
-                        level='info',
-                    )
-                except ImportError:
-                    pass
+                from sentry_sdk import capture_message
+                capture_message('Locked for {self.id}'.format(**locals()))
+
                 return self.status
             time.sleep(0.1)
             trys -= 1
+        from sentry_sdk import capture_message
+        capture_message('Could not lock for {self.id}'.format(**locals()))
         raise Exception('Could not lock for {self.id}'.format(**locals()))
 
     def __exit__(self, type, value, tb):
