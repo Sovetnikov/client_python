@@ -39,12 +39,32 @@ class CacheLock(object):
             self.status = cache.add(self.id, 'locked', self.ttl)
             if self.status:
                 in_lock = self.id
+
+                try:
+                    from sentry_sdk import add_breadcrumb
+                    add_breadcrumb(
+                        category='lock',
+                        message='locked {self.id}'.format(**locals()),
+                        level='info',
+                    )
+                except ImportError:
+                    pass
                 return self.status
             time.sleep(0.1)
             trys -= 1
         raise Exception('Could not lock for {self.id}'.format(**locals()))
 
     def __exit__(self, type, value, tb):
+        try:
+            from sentry_sdk import add_breadcrumb
+            add_breadcrumb(
+                category='lock',
+                message='released {self.id}'.format(**locals()),
+                level='info',
+            )
+        except ImportError:
+            pass
+
         global in_lock
         in_lock = None
         if self.status:
