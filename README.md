@@ -3,6 +3,8 @@
 This prometheus client has ability to store all metrics in django cache.
 Just set environment variable "prometheus_django_cache" to django cache name, like "default".
 
+Gauge has new mode "last" - only last value is collected.
+
 ## Internals
 Each process has separate metrics storage in one cache entry.
 Each process is identified by hostname+pid.
