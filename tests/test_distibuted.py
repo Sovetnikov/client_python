@@ -109,7 +109,7 @@ class TestDistributed(unittest.TestCase):
         g1.set(1)
         self.pid = 456
         g1.set(2)
-        self.assertEqual(2, self.registry.get_sample_value('g1last', {'hostname': hostname}))
+        self.assertEqual(2, self.registry.get_sample_value('g1last'))
 
     def test_gauge_liveall(self):
         self.pid = 123

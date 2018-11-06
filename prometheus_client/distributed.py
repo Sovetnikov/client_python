@@ -275,13 +275,14 @@ class DistributedCollector(object):
                     elif metric._multiprocess_mode == 'livesum':
                         samples[(name, without_pid)] += value
                     elif metric._multiprocess_mode == 'last':
+                        without_hostname_pid = tuple(l for l in labels if l[0] != 'pid' and l[0] != 'hostname')
                         if not value_ts:
                             # Some wrong data, possible from previous versions
                             value_ts = int(time.time()) - 60*60*5
-                        current_ts = samples_ts.setdefault((name, without_pid), value_ts)
+                        current_ts = samples_ts.setdefault((name, without_hostname_pid), value_ts)
                         if value_ts >= current_ts:
-                            samples[(name, without_pid)] = value
-                            samples_ts[(name, without_pid)] = value_ts
+                            samples[(name, without_hostname_pid)] = value
+                            samples_ts[(name, without_hostname_pid)] = value_ts
                     else:  # all/liveall
                         samples[(name, labels)] = value
 
