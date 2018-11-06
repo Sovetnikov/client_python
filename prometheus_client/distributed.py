@@ -233,7 +233,11 @@ class DistributedCollector(object):
             multiprocess_mode = None
             if '_' in typ:
                 typ, multiprocess_mode = typ.split('_')
-            for key, (value, value_ts) in cache_value.items():
+            for key, value in cache_value.items():
+                if isinstance(value, tuple):
+                    value, value_ts = value
+                else:
+                    value_ts = None
                 metric_name, name, labels = json.loads(key)
                 labels_key = tuple(sorted(labels.items()))
 
