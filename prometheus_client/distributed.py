@@ -233,7 +233,7 @@ class DistributedCollector(object):
 
                 metric = metrics.get(metric_name)
                 if metric is None:
-                    metric = core.Metric(metric_name, 'Multiprocess metric', typ)
+                    metric = core.Metric(metric_name, 'Distributed metric', typ)
                     metrics[metric_name] = metric
 
                 if typ == 'gauge':

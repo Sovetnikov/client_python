@@ -97,11 +97,11 @@ class TestDistributed(unittest.TestCase):
         self.assertEqual(3, self.registry.get_sample_value('h_sum'))
         self.assertEqual(2, self.registry.get_sample_value('h_bucket', {'le': '5.0'}))
 
-    def test_gauge_all(self):
-        self.pid = 123
-        with self.assertRaises(Exception) as e:
-            g1 = Gauge('g1', 'help', registry=None)
-        self.assertTrue('not supported' in str(e.exception))
+    # def test_gauge_all(self):
+    #     self.pid = 123
+    #     with self.assertRaises(Exception) as e:
+    #         g1 = Gauge('g1', 'help', registry=None)
+    #     self.assertTrue('not supported' in str(e.exception))
 
     def test_gauge_liveall(self):
         self.pid = 123
@@ -189,16 +189,20 @@ class TestDistributed(unittest.TestCase):
 
         c = Counter('c', 'help', labelnames=labels.keys(), registry=None)
         g = Gauge('g', 'help', labelnames=labels.keys(), registry=None, multiprocess_mode='liveall')
+        gall = Gauge('gall', 'help', labelnames=labels.keys(), registry=None, multiprocess_mode='all')
+        gempty = Gauge('gempty', 'help', labelnames=labels.keys(), registry=None, multiprocess_mode='all')
         h = Histogram('h', 'help', labelnames=labels.keys(), registry=None)
 
         c.labels(**labels).inc(1)
         g.labels(**labels).set(1)
+        gall.labels(**labels).set(1)
         h.labels(**labels).observe(1)
 
         self.pid = 1
 
         c.labels(**labels).inc(1)
         g.labels(**labels).set(1)
+        gall.labels(**labels).set(1)
         h.labels(**labels).observe(5)
 
         metrics = dict((m.name, m) for m in self.collector.collect())
@@ -209,9 +213,15 @@ class TestDistributed(unittest.TestCase):
         metrics['g'].samples.sort(key=lambda x: x[1]['pid'])
         for sample in metrics['g'].samples:
             sample.labels.pop('hostname')
+        for sample in metrics['gall'].samples:
+            sample.labels.pop('hostname')
         self.assertEqual(metrics['g'].samples, [
             Sample('g', add_label('pid', '0'), 1.0),
             Sample('g', add_label('pid', '1'), 1.0),
+        ])
+        self.assertEqual(metrics['gall'].samples, [
+            Sample('gall', add_label('pid', '0'), 1.0),
+            Sample('gall', add_label('pid', '1'), 1.0),
         ])
 
         metrics['h'].samples.sort(

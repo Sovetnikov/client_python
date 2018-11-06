@@ -18,6 +18,8 @@ class GCCollector(object):
         # the GC collector is always disabled in multiprocess mode.
         if 'prometheus_multiproc_dir' in os.environ:
             return
+        if 'prometheus_django_cache' in os.environ:
+            return
 
         if not hasattr(gc, 'callbacks'):
             return
