@@ -84,6 +84,7 @@ class CacheLock(object):
                 cache.delete(self.id)
             if self.id in cache:
                 raise Exception('Id in cache ' + self.id)
+            self.status = False
 
 
 distributed_list_cache_key = 'pc_distributed_list'
