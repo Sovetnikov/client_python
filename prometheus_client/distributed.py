@@ -2,16 +2,19 @@
 
 from __future__ import unicode_literals
 
+import gc
 import inspect
 import json
 import os
 import socket
 import time
 from collections import defaultdict
+from contextlib import contextmanager
 from threading import Lock
 
 from django.core.cache import caches
-cache = caches[os.environ.get('prometheus_django_cache','default')]
+
+cache = caches[os.environ.get('prometheus_django_cache', 'default')]
 
 hostname = socket.gethostname()
 
@@ -19,13 +22,17 @@ in_lock = None
 
 lock = Lock()
 
+
 class FakeSuccessContextManager(object):
     def __nonzero__(self):
         return True
+
     def __enter__(self):
         return self
+
     def __exit__(self, *args):
         pass
+
 
 class CacheLock(object):
     def __init__(self, lock_id, ttl):
@@ -38,47 +45,18 @@ class CacheLock(object):
         return self.status
 
     def __enter__(self):
-        # if self.status:
-        #     # Already locked - return fake success lock
-        #     return FakeSuccessContextManager().__enter__()
-
-        global in_lock
-        # if in_lock:
-        #     raise Exception('Already on lock ' + in_lock)
         trys = 6
         while trys:
             self.timeout_at = time.monotonic() + self.ttl
             self.status = cache.add(self.id, 'locked', self.ttl)
             if self.status:
                 in_lock = self.id
-
-                from sentry_sdk import capture_exception
-                try:
-                    raise Exception('Locked for {self.id}'.format(**locals()))
-                except Exception as e:
-                    capture_exception(e)
-
                 return self.status
             time.sleep(0.1)
             trys -= 1
-        from sentry_sdk import capture_exception
-        try:
-            raise Exception('Could not lock for {self.id}'.format(**locals()))
-        except Exception as e:
-            capture_exception(e)
         raise Exception('Could not lock for {self.id}'.format(**locals()))
 
     def __exit__(self, type, value, tb):
-        try:
-            from sentry_sdk import add_breadcrumb
-            add_breadcrumb(
-                category='lock',
-                message='released {self.id}'.format(**locals()),
-                level='info',
-            )
-        except ImportError:
-            pass
-
         global in_lock
         in_lock = None
         if self.status:
@@ -93,35 +71,41 @@ distributed_list_cache_key = 'pc_distributed_list'
 distributed_list_lock = CacheLock(distributed_list_cache_key, ttl=20)
 added_to_distributed_list = set()
 
-distributed_list_ttl_minutes = 60*24*5
-distributed_value_ttl_minutes = 60*24*5
+distributed_list_ttl_minutes = 60 * 24 * 5
+distributed_value_ttl_minutes = 60 * 24 * 5
+
+
+
+@contextmanager
+def gc_disabled():
+    was_enabled_previously = gc.isenabled()
+    gc.disable()
+    yield
+    if was_enabled_previously:
+        gc.enable()
+
 
 def add_to_distributed_list(pid):
     if not (hostname, pid) in added_to_distributed_list:
-        with distributed_list_lock:
-            l = cache.get(distributed_list_cache_key, set())
-            l.add((hostname, pid))
-            cache.set(distributed_list_cache_key, l, distributed_list_ttl_minutes*60)
-            added_to_distributed_list.add((hostname, pid))
+        with gc_disabled():
+            with distributed_list_lock:
+                l = cache.get(distributed_list_cache_key, set())
+                l.add((hostname, pid))
+                cache.set(distributed_list_cache_key, l, distributed_list_ttl_minutes * 60)
+                added_to_distributed_list.add((hostname, pid))
 
 
 def remove_from_distributed_list(pid):
-    with distributed_list_lock:
-        l = cache.get(distributed_list_cache_key, set())
+    with gc_disabled():
+        with distributed_list_lock:
+            l = cache.get(distributed_list_cache_key, set())
 
-        def _iterate():
-            if isinstance(pid, int):
-                yield pid
-            else:
-                for p in pid:
-                    yield p
+            if (hostname, pid) in l:
+                l.remove((hostname, pid))
+            if (hostname, pid) in added_to_distributed_list:
+                added_to_distributed_list.remove((hostname, pid))
 
-        if (hostname, pid) in l:
-            l.remove((hostname, pid))
-        if (hostname, pid) in added_to_distributed_list:
-            added_to_distributed_list.remove((hostname, pid))
-
-        cache.set(distributed_list_cache_key, l, distributed_list_ttl_minutes*60)
+            cache.set(distributed_list_cache_key, l, distributed_list_ttl_minutes * 60)
 
 
 _pidFunc = os.getpid
