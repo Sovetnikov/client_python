@@ -1092,7 +1092,7 @@ def _floatToGoString(d):
         return '+Inf'
     elif d == _MINUS_INF:
         return '-Inf'
-    elif math.isnan(d):
+    elif d is None or math.isnan(d):
         return 'NaN'
     else:
         return repr(float(d))
