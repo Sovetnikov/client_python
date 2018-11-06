@@ -275,6 +275,8 @@ class DistributedCollector(object):
                     elif metric._multiprocess_mode == 'livesum':
                         samples[(name, without_pid)] += value
                     elif metric._multiprocess_mode == 'last':
+                        if not value_ts:
+                            raise Exception('no timestamp for "' + str((name, without_pid)) + '"')
                         current_ts = samples_ts.setdefault((name, without_pid), value_ts)
                         if value_ts >= current_ts:
                             samples[(name, without_pid)] = value
