@@ -19,6 +19,14 @@ in_lock = None
 
 lock = Lock()
 
+class FakeSuccessContextManager(object):
+    def __nonzero__(self):
+        return True
+    def __enter__(self):
+        return self
+    def __exit__(self, *args):
+        pass
+
 class CacheLock(object):
     def __init__(self, lock_id, ttl):
         self.id = 'cachelock-{0}'.format(lock_id)
@@ -30,6 +38,10 @@ class CacheLock(object):
         return self.status
 
     def __enter__(self):
+        if self.status:
+            # Already locked - return fake success lock
+            return FakeSuccessContextManager().__enter__()
+
         global in_lock
         # if in_lock:
         #     raise Exception('Already on lock ' + in_lock)
