@@ -277,7 +277,7 @@ class DistributedCollector(object):
                     elif metric._multiprocess_mode == 'last':
                         if not value_ts:
                             # Some wrong data, possible from previous versions
-                            value_ts = int(time.time())
+                            value_ts = int(time.time()) - 60*60*5
                         current_ts = samples_ts.setdefault((name, without_pid), value_ts)
                         if value_ts >= current_ts:
                             samples[(name, without_pid)] = value
