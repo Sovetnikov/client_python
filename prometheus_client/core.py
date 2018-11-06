@@ -1180,7 +1180,9 @@ class Histogram(object):
         samples = []
         acc = 0
         for i, bound in enumerate(self._upper_bounds):
-            acc += self._buckets[i].get()
+            v = self._buckets[i].get()
+            if v is not None:
+                acc += v
             samples.append(('_bucket', {'le': _floatToGoString(bound)}, acc))
         samples.append(('_count', {}, acc))
         samples.append(('_sum', {}, self._sum.get()))
