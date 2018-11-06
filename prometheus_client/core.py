@@ -971,11 +971,12 @@ class Gauge(object):
     '''
     _type = 'gauge'
     _reserved_labelnames = []
-    _MULTIPROC_MODES = frozenset(('min', 'max', 'livesum', 'liveall', 'all'))
+    _MULTIPROC_MODES = frozenset(('min', 'max', 'livesum', 'liveall', 'all', 'last'))
 
     def __init__(self, name, labelnames, labelvalues, multiprocess_mode='all'):
         if (_ValueClass._multiprocess and
-                multiprocess_mode not in self._MULTIPROC_MODES):
+                (multiprocess_mode not in self._MULTIPROC_MODES or multiprocess_mode == 'last')):
+
             raise ValueError('Invalid multiprocess mode: ' + multiprocess_mode)
         self._value = _ValueClass(
             self._type, name, name, labelnames, labelvalues,

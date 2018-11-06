@@ -175,27 +175,33 @@ class DistributedValue(object):
         cache.set(self.cachekey, dict_value, distributed_value_ttl_minutes)
 
     def __reset(self):
-        # with lock:
+        ts = int(time.time())
         d = self.__get_dict()
         if not self.valuekey in d:
-            d[self.valuekey] = 0
+            d[self.valuekey] = (0, ts)
             self.__set_dict(d)
 
     def inc(self, amount):
-        # with lock:
+        ts = int(time.time())
         d = self.__get_dict()
-        d[self.valuekey] = d.get(self.valuekey, 0) + amount
+        v = d.get(self.valuekey, 0)
+        if isinstance(v, tuple):
+            v = v[0]
+        d[self.valuekey] = (v + amount, ts)
         self.__set_dict(d)
 
     def set(self, value):
-        # with lock:
+        ts = int(time.time())
         d = self.__get_dict()
-        d[self.valuekey] = value
+        d[self.valuekey] = (value, ts)
         self.__set_dict(d)
 
     def get(self):
         # with lock:
-        return self.__get_dict().get(self.valuekey, None)
+        v = self.__get_dict().get(self.valuekey, None)
+        if isinstance(v, tuple):
+            v = v[0]
+        return v
 
 
 class DistributedCollector(object):
@@ -227,7 +233,7 @@ class DistributedCollector(object):
             multiprocess_mode = None
             if '_' in typ:
                 typ, multiprocess_mode = typ.split('_')
-            for key, value in cache_value.items():
+            for key, (value, value_ts) in cache_value.items():
                 metric_name, name, labels = json.loads(key)
                 labels_key = tuple(sorted(labels.items()))
 
@@ -240,7 +246,7 @@ class DistributedCollector(object):
                     metric._multiprocess_mode = multiprocess_mode
                     metric.add_sample(name, labels_key + (('pid', pid),
                                                           ('hostname', value_hostname)
-                                                          ), value)
+                                                          ), value, timestamp=value_ts)
                 else:
                     # The duplicates and labels are fixed in the next for.
                     metric.add_sample(name, labels_key, value)
@@ -248,8 +254,10 @@ class DistributedCollector(object):
         for metric in metrics.values():
             samples = defaultdict(float)
             buckets = {}
+            samples_ts = {}
+
             for s in metric.samples:
-                name, labels, value = s.name, s.labels, s.value
+                name, labels, value, value_ts = s.name, s.labels, s.value, s.timestamp
                 if metric.type == 'gauge':
                     without_pid = tuple(l for l in labels if l[0] != 'pid')
                     if metric._multiprocess_mode == 'min':
@@ -262,6 +270,11 @@ class DistributedCollector(object):
                             samples[(s.name, without_pid)] = value
                     elif metric._multiprocess_mode == 'livesum':
                         samples[(name, without_pid)] += value
+                    elif metric._multiprocess_mode == 'last':
+                        current_ts = samples_ts.setdefault((name, without_pid), value_ts)
+                        if value_ts >= current_ts:
+                            samples[(name, without_pid)] = value
+                            samples_ts[(name, without_pid)] = value_ts
                     else:  # all/liveall
                         samples[(name, labels)] = value
 
@@ -299,7 +312,7 @@ class DistributedCollector(object):
                         samples[(metric.name + '_count', labels)] = acc
 
             # Convert to correct sample format.
-            metric.samples = [core.Sample(name, dict(labels), value) for (name, labels), value in samples.items()]
+            metric.samples = [core.Sample(name, dict(labels), value, samples_ts.get((name, labels))) for (name, labels), value in samples.items()]
         return metrics.values()
 
 

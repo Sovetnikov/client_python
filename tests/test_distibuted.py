@@ -103,6 +103,14 @@ class TestDistributed(unittest.TestCase):
     #         g1 = Gauge('g1', 'help', registry=None)
     #     self.assertTrue('not supported' in str(e.exception))
 
+    def test_gauge_last(self):
+        self.pid = 123
+        g1 = Gauge('g1last', 'help', registry=None, multiprocess_mode='last')
+        g1.set(1)
+        self.pid = 456
+        g1.set(2)
+        self.assertEqual(2, self.registry.get_sample_value('g1last', {'hostname': hostname}))
+
     def test_gauge_liveall(self):
         self.pid = 123
         g1 = Gauge('g2', 'help', registry=None, multiprocess_mode='liveall')
