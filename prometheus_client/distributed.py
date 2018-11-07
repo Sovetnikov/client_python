@@ -172,7 +172,7 @@ class DistributedValue(object):
         return cache.get(self.cachekey, {})
 
     def __set_dict(self, dict_value):
-        cache.set(self.cachekey, dict_value, distributed_value_ttl_minutes)
+        cache.set(self.cachekey, dict_value, distributed_value_ttl_minutes*60)
 
     def __reset(self):
         ts = int(time.time())
