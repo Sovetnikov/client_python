@@ -2,6 +2,8 @@
 
 from __future__ import unicode_literals
 
+from random import randint
+
 import gc
 import inspect
 import json
@@ -45,14 +47,14 @@ class CacheLock(object):
         return self.status
 
     def __enter__(self):
-        trys = 6
+        trys = 40
         while trys:
             self.timeout_at = time.monotonic() + self.ttl
             self.status = cache.add(self.id, 'locked', self.ttl)
             if self.status:
                 in_lock = self.id
                 return self.status
-            time.sleep(0.1)
+            time.sleep(randint(1,10)/10)
             trys -= 1
         raise Exception('Could not lock for {self.id}'.format(**locals()))
 
